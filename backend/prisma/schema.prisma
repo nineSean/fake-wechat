@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  phoneNumber   String    @unique @map("phone_number")
+  email         String?   @unique
+  username      String    @unique
+  nickname      String
+  avatarUrl     String?   @map("avatar_url")
+  bio           String?
+  gender        Int?      @default(0) // 0: unknown, 1: male, 2: female
+  birthday      DateTime?
+  location      String?
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Auth related
+  passwordHash  String    @map("password_hash")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  // Relationships
+  sentFriendRequests     Friendship[] @relation("UserFriendRequests")
+  receivedFriendRequests Friendship[] @relation("FriendUserRequests")
+  ownedGroups            Group[]      @relation("GroupOwner")
+  groupMemberships       GroupMember[]
+  sentMessages           Message[]    @relation("MessageSender")
+  moments                Moment[]
+  momentLikes            MomentLike[]
+  momentComments         MomentComment[]
+
+  @@map("users")
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  friendId  String   @map("friend_id")
+  status    Int      @default(0) // 0: pending, 1: accepted, 2: rejected, 3: blocked
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User @relation("UserFriendRequests", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendUserRequests", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@map("friendships")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  avatarUrl   String?  @map("avatar_url")
+  ownerId     String   @map("owner_id")
+  maxMembers  Int      @default(500) @map("max_members")
+  isPrivate   Boolean  @default(false) @map("is_private")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner   User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+  messages Message[]    @relation("GroupMessages")
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String   @map("group_id")
+  userId   String   @map("user_id")
+  role     Int      @default(0) // 0: member, 1: admin, 2: owner
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  senderId       String   @map("sender_id")
+  messageType    String   @map("message_type") // text, image, video, audio, file, location
+  content        String?
+  mediaUrl       String?  @map("media_url")
+  fileSize       Int?     @map("file_size")
+  duration       Int?     // for audio/video in seconds
+  isRead         Boolean  @default(false) @map("is_read")
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  replyToId      String?  @map("reply_to_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  sender    User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  group     Group?    @relation("GroupMessages", fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo   Message?  @relation("MessageReply", fields: [replyToId], references: [id])
+  replies   Message[] @relation("MessageReply")
+
+  @@map("messages")
+}
+
+model Moment {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  content      String?
+  mediaUrls    String[] @map("media_urls")
+  location     String?
+  visibility   Int      @default(0) // 0: public, 1: friends only, 2: private
+  likeCount    Int      @default(0) @map("like_count")
+  commentCount Int      @default(0) @map("comment_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes    MomentLike[]
+  comments MomentComment[]
+
+  @@map("moments")
+}
+
+model MomentLike {
+  id       String   @id @default(cuid())
+  momentId String   @map("moment_id")
+  userId   String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  moment Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([momentId, userId])
+  @@map("moment_likes")
+}
+
+model MomentComment {
+  id        String   @id @default(cuid())
+  momentId  String   @map("moment_id")
+  userId    String   @map("user_id")
+  content   String
+  replyToId String?  @map("reply_to_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  moment  Moment         @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyTo MomentComment? @relation("CommentReply", fields: [replyToId], references: [id])
+  replies MomentComment[] @relation("CommentReply")
+
+  @@map("moment_comments")
+}
