@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../shared/services/prisma.service';
-import { SendMessageDto } from './dto/send-message.dto';
-import { GetMessagesDto } from './dto/get-messages.dto';
+import { PrismaService } from '../../shared/services/prisma.service';
+import { SendMessageDto } from '../dto/send-message.dto';
+import { GetMessagesDto } from '../dto/get-messages.dto';
 
 @Injectable()
 export class ChatService {
