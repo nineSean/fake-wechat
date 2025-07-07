@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiRequest, uploadFile, getAvatarUrl } from '../../lib/api';
+import { apiRequest, uploadFile, getAvatarUrl, logout } from '../../lib/api';
 
 interface UserProfile {
   id: string;
@@ -118,6 +118,17 @@ export default function ProfilePage() {
     fileInputRef.current?.click();
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // 即使登出失败，也重定向到登录页
+      router.push('/login');
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -136,6 +147,14 @@ export default function ProfilePage() {
           <p className="mt-2 text-center text-sm text-gray-600">
             管理您的个人信息和偏好设置
           </p>
+          <div className="mt-4 text-center">
+            <button
+              onClick={handleLogout}
+              className="text-sm text-red-600 hover:text-red-500 font-medium"
+            >
+              退出登录
+            </button>
+          </div>
         </div>
 
         <div className="bg-white shadow rounded-lg">
@@ -208,7 +227,7 @@ export default function ProfilePage() {
                     name="nickname"
                     value={formData.nickname || ''}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   />
                 </div>
 
@@ -222,7 +241,7 @@ export default function ProfilePage() {
                     name="email"
                     value={formData.email || ''}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   />
                 </div>
 
@@ -235,7 +254,7 @@ export default function ProfilePage() {
                     name="gender"
                     value={formData.gender || 0}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   >
                     <option value={0}>保密</option>
                     <option value={1}>男</option>
@@ -253,7 +272,7 @@ export default function ProfilePage() {
                     name="birthday"
                     value={formData.birthday?.split('T')[0] || ''}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   />
                 </div>
 
@@ -268,7 +287,7 @@ export default function ProfilePage() {
                     value={formData.location || ''}
                     onChange={handleChange}
                     placeholder="如：北京市朝阳区"
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   />
                 </div>
 
@@ -283,7 +302,7 @@ export default function ProfilePage() {
                     value={formData.bio || ''}
                     onChange={handleChange}
                     placeholder="介绍一下你自己..."
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-gray-900"
                   />
                 </div>
               </div>
@@ -322,10 +341,6 @@ export default function ProfilePage() {
               <div>
                 <dt className="text-sm font-medium text-gray-500">手机号</dt>
                 <dd className="mt-1 text-sm text-gray-900">{user.phoneNumber}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">用户ID</dt>
-                <dd className="mt-1 text-sm text-gray-900 font-mono">{user.id}</dd>
               </div>
             </div>
           </div>
