@@ -4,6 +4,17 @@ import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { SearchUsersDto } from '../dto/search-users.dto';
 import * as bcrypt from 'bcryptjs';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
 
 @Injectable()
 export class UsersService {
@@ -127,6 +138,12 @@ export class UsersService {
     });
   }
 
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
   async findByUsername(username: string) {
     return this.prisma.user.findUnique({
       where: { username },
@@ -160,6 +177,36 @@ export class UsersService {
     });
 
     return user;
+  }
+
+  async uploadAvatar(userId: string, file: MulterFile) {
+    if (!file) {
+      throw new NotFoundException('No file uploaded');
+    }
+
+    // 简单的文件存储到本地 (生产环境建议使用 AWS S3)
+    const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const fileExtension = path.extname(file.originalname);
+    const fileName = `${userId}-${Date.now()}${fileExtension}`;
+    const filePath = path.join(uploadDir, fileName);
+    
+    fs.writeFileSync(filePath, file.buffer);
+    
+    const avatarUrl = `/uploads/avatars/${fileName}`;
+    
+    // 更新用户头像
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        avatarUrl: true,
+      },
+    });
   }
 
   async remove(id: string) {

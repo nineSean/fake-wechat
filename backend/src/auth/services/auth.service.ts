@@ -12,8 +12,13 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(phoneNumber: string, password: string): Promise<any> {
-    const user = await this.usersService.findByPhoneNumber(phoneNumber);
+  async validateUser(identifier: string, password: string): Promise<any> {
+    // 判断是邮箱还是手机号
+    const isEmail = identifier.includes('@');
+    const user = isEmail 
+      ? await this.usersService.findByEmail(identifier)
+      : await this.usersService.findByPhoneNumber(identifier);
+      
     if (user && await bcrypt.compare(password, user.passwordHash)) {
       const { passwordHash, ...result } = user;
       return result;
@@ -22,8 +27,8 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const { phoneNumber, password } = loginDto;
-    const user = await this.validateUser(phoneNumber, password);
+    const { identifier, password } = loginDto;
+    const user = await this.validateUser(identifier, password);
     
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
