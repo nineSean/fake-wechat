@@ -3,6 +3,7 @@ import { PrismaService } from '../../shared/services/prisma.service';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { SearchUsersDto } from '../dto/search-users.dto';
+import { UpdateUserSettingsDto } from '../dto/user-settings.dto';
 import * as bcrypt from 'bcryptjs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -213,6 +214,45 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id },
       data: { isActive: false },
+    });
+  }
+
+  async getSettings(userId: string) {
+    let settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    // 如果用户没有设置记录，创建默认设置
+    if (!settings) {
+      settings = await this.prisma.userSettings.create({
+        data: { userId },
+      });
+    }
+
+    return settings;
+  }
+
+  async updateSettings(userId: string, updateSettingsDto: UpdateUserSettingsDto) {
+    // 确保用户设置记录存在
+    await this.getSettings(userId);
+
+    return this.prisma.userSettings.update({
+      where: { userId },
+      data: updateSettingsDto,
+    });
+  }
+
+  async resetSettings(userId: string) {
+    // 删除现有设置，这将触发创建默认设置
+    await this.prisma.userSettings.delete({
+      where: { userId },
+    }).catch(() => {
+      // 忽略删除错误（如果记录不存在）
+    });
+
+    // 创建新的默认设置
+    return this.prisma.userSettings.create({
+      data: { userId },
     });
   }
 }

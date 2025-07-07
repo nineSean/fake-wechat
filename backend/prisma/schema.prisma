@@ -43,6 +43,7 @@ model User {
   momentLikes            MomentLike[]
   momentComments         MomentComment[]
   refreshTokens          RefreshToken[]
+  settings               UserSettings?
 
   @@map("users")
 }
@@ -58,6 +59,41 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+  
+  // 隐私设置
+  profileVisibility      String  @default("public") @map("profile_visibility") // public, friends, private
+  phoneVisibility        String  @default("friends") @map("phone_visibility") // public, friends, private
+  emailVisibility        String  @default("private") @map("email_visibility")
+  lastSeenVisibility     String  @default("everyone") @map("last_seen_visibility") // everyone, contacts, nobody
+  allowSearchByPhone     Boolean @default(true) @map("allow_search_by_phone")
+  allowSearchByEmail     Boolean @default(false) @map("allow_search_by_email")
+  
+  // 通知设置
+  messageNotifications       Boolean @default(true) @map("message_notifications")
+  groupNotifications         Boolean @default(true) @map("group_notifications")
+  friendRequestNotifications Boolean @default(true) @map("friend_request_notifications")
+  emailNotifications         Boolean @default(false) @map("email_notifications")
+  pushNotifications          Boolean @default(true) @map("push_notifications")
+  soundEnabled              Boolean @default(true) @map("sound_enabled")
+  vibrationEnabled          Boolean @default(true) @map("vibration_enabled")
+  
+  // 聊天设置
+  readReceipts        Boolean @default(true) @map("read_receipts")
+  typingIndicators    Boolean @default(true) @map("typing_indicators")
+  autoDownloadImages  Boolean @default(true) @map("auto_download_images")
+  autoDownloadVideos  Boolean @default(false) @map("auto_download_videos")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("user_settings")
 }
 
 model Friendship {

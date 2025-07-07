@@ -20,6 +20,7 @@ import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { SearchUsersDto } from '../dto/search-users.dto';
 import { UploadAvatarDto } from '../dto/upload-avatar.dto';
+import { UpdateUserSettingsDto } from '../dto/user-settings.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 interface MulterFile {
@@ -107,5 +108,36 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User account deactivated' })
   remove(@Request() req) {
     return this.usersService.remove(req.user.id);
+  }
+
+  @Get('me/settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user settings' })
+  @ApiResponse({ status: 200, description: 'User settings retrieved' })
+  getSettings(@Request() req) {
+    this.logger.log(`Getting settings for user ${req.user.id}`);
+    return this.usersService.getSettings(req.user.id);
+  }
+
+  @Patch('me/settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update user settings' })
+  @ApiResponse({ status: 200, description: 'User settings updated' })
+  updateSettings(@Request() req, @Body() updateSettingsDto: UpdateUserSettingsDto) {
+    this.logger.log(`Updating settings for user ${req.user.id}`);
+    this.logger.log(`Settings data: ${JSON.stringify(updateSettingsDto)}`);
+    return this.usersService.updateSettings(req.user.id, updateSettingsDto);
+  }
+
+  @Post('me/settings/reset')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reset user settings to default' })
+  @ApiResponse({ status: 200, description: 'User settings reset' })
+  resetSettings(@Request() req) {
+    this.logger.log(`Resetting settings for user ${req.user.id}`);
+    return this.usersService.resetSettings(req.user.id);
   }
 }

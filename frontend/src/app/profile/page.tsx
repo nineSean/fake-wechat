@@ -147,7 +147,14 @@ export default function ProfilePage() {
           <p className="mt-2 text-center text-sm text-gray-600">
             管理您的个人信息和偏好设置
           </p>
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-x-4">
+            <button
+              onClick={() => router.push('/settings')}
+              className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
+            >
+              设置
+            </button>
+            <span className="text-gray-300">|</span>
             <button
               onClick={handleLogout}
               className="text-sm text-red-600 hover:text-red-500 font-medium"
