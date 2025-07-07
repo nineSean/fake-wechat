@@ -149,6 +149,13 @@ export default function ProfilePage() {
           </p>
           <div className="mt-4 text-center space-x-4">
             <button
+              onClick={() => router.push('/friends')}
+              className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
+            >
+              好友
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
               onClick={() => router.push('/settings')}
               className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
             >

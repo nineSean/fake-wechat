@@ -52,8 +52,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Search users' })
   @ApiResponse({ status: 200, description: 'Users found' })
-  search(@Query() searchDto: SearchUsersDto) {
-    return this.usersService.findAll(searchDto);
+  search(@Query() searchDto: SearchUsersDto, @Request() req) {
+    return this.usersService.findAll(searchDto, req.user.id);
   }
 
   @Get('me')

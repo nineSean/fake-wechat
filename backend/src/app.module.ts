@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ChatModule } from './chat/chat.module';
+import { FriendsModule } from './friends/friends.module';
 import { SharedModule } from './shared/shared.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { SharedModule } from './shared/shared.module';
     AuthModule,
     UsersModule,
     ChatModule,
+    FriendsModule,
     SharedModule,
   ],
 })

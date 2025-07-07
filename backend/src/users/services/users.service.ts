@@ -66,7 +66,7 @@ export class UsersService {
     });
   }
 
-  async findAll(searchDto: SearchUsersDto) {
+  async findAll(searchDto: SearchUsersDto, currentUserId?: string) {
     const { q, limit = 10, offset = 0 } = searchDto;
     
     const where = q ? {
@@ -76,7 +76,12 @@ export class UsersService {
         { email: { contains: q, mode: 'insensitive' as const } },
       ],
       isActive: true,
-    } : { isActive: true };
+      // 不包括当前用户自己
+      ...(currentUserId && { id: { not: currentUserId } }),
+    } : { 
+      isActive: true,
+      ...(currentUserId && { id: { not: currentUserId } }),
+    };
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -96,8 +101,41 @@ export class UsersService {
       this.prisma.user.count({ where }),
     ]);
 
+    // 如果提供了当前用户ID，获取与这些用户的好友关系状态
+    let usersWithFriendshipStatus = users;
+    if (currentUserId) {
+      const friendships = await this.prisma.friendship.findMany({
+        where: {
+          OR: [
+            { 
+              userId: currentUserId,
+              friendId: { in: users.map(u => u.id) },
+            },
+            {
+              userId: { in: users.map(u => u.id) },
+              friendId: currentUserId,
+            },
+          ],
+        },
+      });
+
+      usersWithFriendshipStatus = users.map(user => {
+        const friendship = friendships.find(f => 
+          (f.userId === currentUserId && f.friendId === user.id) ||
+          (f.userId === user.id && f.friendId === currentUserId)
+        );
+
+        return {
+          ...user,
+          friendshipStatus: friendship?.status || null, // null: no relationship, 0: pending, 1: friends, 2: rejected, 3: blocked
+          isPendingRequest: friendship?.userId === currentUserId && friendship?.status === 0,
+          hasReceivedRequest: friendship?.userId === user.id && friendship?.status === 0,
+        };
+      });
+    }
+
     return {
-      users,
+      users: usersWithFriendshipStatus,
       meta: {
         total,
         page: Math.floor(offset / limit) + 1,
