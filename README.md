@@ -90,19 +90,22 @@
 ## 设计文档
 
 ### 📋 需求分析
-- [功能需求分析](./requirements.md) - 详细的功能需求和技术要求
+- [功能需求分析](./docs/requirements.md) - 详细的功能需求和技术要求
 
 ### 🛠️ 技术选型
-- [技术栈选择](./tech-stack.md) - 前后端技术栈对比和选择理由
+- [技术栈选择](./docs/tech-stack.md) - 前后端技术栈对比和选择理由
 
 ### 🏗️ 架构设计
-- [系统架构设计](./system-architecture.md) - 整体架构和微服务设计
-- [数据库设计](./database-design.md) - 数据模型和存储方案
-- [API接口设计](./api-design.md) - RESTful API 和 WebSocket 接口
+- [系统架构设计](./docs/system-architecture.md) - 整体架构和微服务设计
+- [数据库设计](./docs/database-design.md) - 数据模型和存储方案
+- [API接口设计](./docs/api-design.md) - RESTful API 和 WebSocket 接口
 
 ### ☁️ 云部署
-- [AWS Serverless 部署](./aws-serverless-deployment.md) - 无服务器架构和部署方案
-- [实时通信方案](./realtime-communication.md) - WebSocket 连接和消息传递
+- [AWS Serverless 部署](./docs/aws-serverless-deployment.md) - 无服务器架构和部署方案
+- [实时通信方案](./docs/realtime-communication.md) - WebSocket 连接和消息传递
+
+### 📊 项目进度
+- [开发进度报告](./docs/schedule.md) - 当前进度和开发计划
 
 ## 快速开始
 
@@ -115,16 +118,20 @@
 ```bash
 # 克隆项目
 git clone <repository-url>
-cd wechat-app
+cd fake-wechat
 
-# 安装依赖
-npm install
+# 安装所有依赖
+npm run install:all
 
-# 启动开发服务器
+# 启动数据库 (需要先安装 PostgreSQL)
+brew services start postgresql@14
+createdb fake_wechat
+
+# 运行数据库迁移
+cd backend && npx prisma migrate dev
+
+# 启动开发服务器 (前后端并行)
 npm run dev
-
-# 启动后端服务
-npm run dev:backend
 ```
 
 ### 部署到 AWS
@@ -139,7 +146,7 @@ npm run deploy:prod
 ## 项目结构
 
 ```
-wechat-app/
+fake-wechat/
 ├── docs/                    # 设计文档
 │   ├── requirements.md
 │   ├── tech-stack.md
@@ -147,21 +154,19 @@ wechat-app/
 │   ├── database-design.md
 │   ├── api-design.md
 │   ├── aws-serverless-deployment.md
-│   └── realtime-communication.md
-├── frontend/                # 前端应用
+│   ├── realtime-communication.md
+│   └── schedule.md
+├── frontend/                # 前端应用 (Next.js)
 │   ├── src/
 │   ├── public/
 │   └── package.json
-├── backend/                 # 后端服务
+├── backend/                 # 后端服务 (NestJS)
 │   ├── src/
-│   ├── lambda/
+│   ├── prisma/
 │   └── package.json
-├── infrastructure/          # 基础设施代码
-│   ├── cloudformation/
-│   ├── terraform/
-│   └── sam/
-├── scripts/                 # 部署脚本
-├── tests/                   # 测试文件
+├── shared/                  # 共享代码
+├── node_modules/            # 依赖包
+├── package.json             # Monorepo 配置
 └── README.md
 ```
 
