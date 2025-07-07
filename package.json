@@ -4,7 +4,7 @@
   "description": "A WeChat-like messaging application built with React and NestJS",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"blue,green\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run start:dev",
     "build": "concurrently \"npm run build:frontend\" \"npm run build:backend\"",
