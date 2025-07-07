@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiRequest, uploadFile } from '../../lib/api';
+import { apiRequest, uploadFile, getAvatarUrl } from '../../lib/api';
 
 interface UserProfile {
   id: string;
@@ -34,7 +34,7 @@ export default function ProfilePage() {
 
   const fetchUserProfile = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       if (!token) {
         router.push('/login');
         return;
@@ -64,9 +64,26 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
+      // Only send allowed fields based on UpdateUserDto
+      const allowedFields = {
+        nickname: formData.nickname,
+        email: formData.email,
+        bio: formData.bio,
+        gender: formData.gender ? Number(formData.gender) : undefined,
+        birthday: formData.birthday,
+        location: formData.location,
+      };
+
+      // Remove undefined values
+      const updateData = Object.fromEntries(
+        Object.entries(allowedFields).filter(([_, value]) => value !== undefined && value !== '')
+      );
+
+      console.log('Sending update data:', updateData);
+
       const updatedUser = await apiRequest('/users/me', {
         method: 'PATCH',
-        body: JSON.stringify(formData),
+        body: JSON.stringify(updateData),
       });
 
       setUser(updatedUser);
@@ -145,7 +162,7 @@ export default function ProfilePage() {
                   {user.avatarUrl ? (
                     <img
                       className="h-20 w-20 rounded-full object-cover"
-                      src={user.avatarUrl}
+                      src={getAvatarUrl(user.avatarUrl) || ''}
                       alt="头像"
                     />
                   ) : (

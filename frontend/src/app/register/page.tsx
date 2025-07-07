@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiRequest } from '../../lib/api';
+import { register, ApiError } from '../../lib/api';
+import { log } from 'console';
 
 interface RegisterFormData {
   phoneNumber: string;
@@ -15,6 +16,7 @@ interface RegisterFormData {
 }
 
 export default function RegisterPage() {
+  console.log('RegisterPage');
   const router = useRouter();
   const [formData, setFormData] = useState<RegisterFormData>({
     phoneNumber: '',
@@ -49,22 +51,22 @@ export default function RegisterPage() {
     }
 
     try {
-      const data = await apiRequest('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          phoneNumber: formData.phoneNumber,
-          email: formData.email,
-          username: formData.username,
-          nickname: formData.nickname,
-          password: formData.password,
-          verificationCode: formData.verificationCode,
-        }),
+      await register({
+        phoneNumber: formData.phoneNumber,
+        email: formData.email,
+        username: formData.username,
+        nickname: formData.nickname,
+        password: formData.password,
+        verificationCode: formData.verificationCode,
       });
 
-      localStorage.setItem('token', data.access_token);
-      router.push('/chat');
-    } catch (err: any) {
-      setError(err.message || '注册失败');
+      router.push('/profile');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('注册失败，请重试');
+      }
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiRequest } from '../../lib/api';
+import { login, ApiError } from '../../lib/api';
 
 interface LoginFormData {
   identifier: string; // 手机号或邮箱
@@ -32,16 +32,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(formData),
-      });
-
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/chat');
-    } catch (err: any) {
-      setError(err.message || '登录失败');
+      await login(formData);
+      router.push('/profile');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('登录失败，请重试');
+      }
     } finally {
       setLoading(false);
     }

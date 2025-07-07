@@ -11,6 +11,7 @@ import {
   Request,
   UseInterceptors,
   UploadedFile,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -33,6 +34,8 @@ interface MulterFile {
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
@@ -77,6 +80,9 @@ export class UsersController {
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiResponse({ status: 200, description: 'User profile updated' })
   updateProfile(@Request() req, @Body() updateUserDto: UpdateUserDto) {
+    this.logger.log(`Updating profile for user ${req.user.id}`);
+    this.logger.log(`Request body: ${JSON.stringify(updateUserDto)}`);
+    
     return this.usersService.update(req.user.id, updateUserDto);
   }
 

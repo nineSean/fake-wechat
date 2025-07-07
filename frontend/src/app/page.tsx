@@ -2,15 +2,14 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { isAuthenticated } from '../lib/api';
 
 export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
     // 检查登录状态
-    const token = localStorage.getItem('token');
-    
-    if (token) {
+    if (isAuthenticated()) {
       // 已登录，跳转到个人资料页面
       router.push('/profile');
     } else {
