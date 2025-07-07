@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiRequest, uploadFile } from '../../lib/api';
 
 interface UserProfile {
   id: string;
@@ -39,21 +40,12 @@ export default function ProfilePage() {
         return;
       }
 
-      const response = await fetch('/api/users/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-        setFormData(userData);
-      } else {
-        router.push('/login');
-      }
+      const userData = await apiRequest('/users/me');
+      setUser(userData);
+      setFormData(userData);
     } catch (err) {
       setError('获取用户信息失败');
+      router.push('/login');
     }
   };
 
@@ -72,26 +64,15 @@ export default function ProfilePage() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/users/me', {
+      const updatedUser = await apiRequest('/users/me', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
-        const updatedUser = await response.json();
-        setUser(updatedUser);
-        setSuccess('个人资料更新成功');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || '更新失败');
-      }
-    } catch (err) {
-      setError('网络错误，请重试');
+      setUser(updatedUser);
+      setSuccess('个人资料更新成功');
+    } catch (err: any) {
+      setError(err.message || '更新失败');
     } finally {
       setLoading(false);
     }
@@ -105,29 +86,12 @@ export default function ProfilePage() {
     setError('');
 
     try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('avatar', file);
-
-      const response = await fetch('/api/users/avatar', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setUser(prev => prev ? { ...prev, avatarUrl: result.avatarUrl } : null);
-        setFormData(prev => ({ ...prev, avatarUrl: result.avatarUrl }));
-        setSuccess('头像更新成功');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || '头像上传失败');
-      }
-    } catch (err) {
-      setError('头像上传失败');
+      const result = await uploadFile('/users/avatar', file);
+      setUser(prev => prev ? { ...prev, avatarUrl: result.avatarUrl } : null);
+      setFormData(prev => ({ ...prev, avatarUrl: result.avatarUrl }));
+      setSuccess('头像更新成功');
+    } catch (err: any) {
+      setError(err.message || '头像上传失败');
     } finally {
       setAvatarUploading(false);
     }

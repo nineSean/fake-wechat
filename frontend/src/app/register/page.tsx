@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { apiRequest } from '../../lib/api';
 
 interface RegisterFormData {
   phoneNumber: string;
@@ -48,11 +49,8 @@ export default function RegisterPage() {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const data = await apiRequest('/auth/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           phoneNumber: formData.phoneNumber,
           email: formData.email,
@@ -63,16 +61,10 @@ export default function RegisterPage() {
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('token', data.access_token);
-        router.push('/chat');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || '注册失败');
-      }
-    } catch (err) {
-      setError('网络错误，请重试');
+      localStorage.setItem('token', data.access_token);
+      router.push('/chat');
+    } catch (err: any) {
+      setError(err.message || '注册失败');
     } finally {
       setLoading(false);
     }
