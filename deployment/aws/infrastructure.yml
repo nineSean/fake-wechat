@@ -253,7 +253,7 @@ Resources:
       DBInstanceIdentifier: !Sub ${Environment}-${ProjectName}-db
       DBInstanceClass: db.t3.micro        # 实例类型：适合开发环境的小型实例
       Engine: postgres                    # 数据库引擎：PostgreSQL
-      EngineVersion: '15.4'               # PostgreSQL 版本号
+      EngineVersion: '15.13'               # PostgreSQL 版本号
       AllocatedStorage: 20                # 存储空间：20GB（免费层上限）
       StorageType: gp2                    # 存储类型：通用 SSD
       

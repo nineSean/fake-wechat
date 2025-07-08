@@ -37,28 +37,27 @@ routes = [
 # 用户会话存储
 [[kv_namespaces]]
 binding = "USER_SESSIONS"             # 在代码中的变量名
-id = "请运行 wrangler kv:namespace create USER_SESSIONS 获取"  # 生产环境 KV ID
-preview_id = "请运行 wrangler kv:namespace create USER_SESSIONS --preview 获取"  # 预览环境 KV ID
+id = "32c171d6caaf4446bf9b02308cbe4e47"  # 生产环境 KV ID
 
 # 缓存数据存储
 [[kv_namespaces]]
 binding = "CACHE"                     # 在代码中的变量名
-id = "请运行 wrangler kv:namespace create CACHE 获取"        # 生产环境 KV ID
-preview_id = "请运行 wrangler kv:namespace create CACHE --preview 获取"        # 预览环境 KV ID
+id = "07e8ad0bf18b4a59b2c3a64479aaf6c2"        # 生产环境 KV ID
 
 # R2 存储绑定（对象存储）
 # R2 是 Cloudflare 的对象存储服务，类似于 AWS S3
 # 用于存储用户头像、图片、文件等媒体内容
 # 相比 S3，R2 没有出站流量费用
-[[r2_buckets]]
-binding = "MEDIA_STORAGE"             # 在代码中的变量名
-bucket_name = "dev-fake-wechat-media" # R2 存储桶名称
+# 注意：需要在 Cloudflare Dashboard 启用 R2 服务
+# [[r2_buckets]]
+# binding = "MEDIA_STORAGE"             # 在代码中的变量名
+# bucket_name = "dev-fake-wechat-media" # R2 存储桶名称
 
 # 环境变量（开发环境）
 # 这些变量在 Workers 代码中可以通过 env 对象访问
 [vars]
 ENVIRONMENT = "development"           # 当前运行环境
-AWS_API_GATEWAY_URL = "请替换为实际的 API Gateway URL"  # AWS Lambda API 地址
+AWS_API_GATEWAY_URL = "https://2223vdgz78.execute-api.us-east-1.amazonaws.com/dev"  # AWS Lambda API 地址
 JWT_SECRET = "dev-jwt-secret-please-change-in-production"  # JWT 令牌加密密钥（开发环境）
 
 # 生产环境变量
