@@ -1,0 +1,481 @@
+# AWS CloudFormation 基础设施模板
+# 
+# 这是一个 Infrastructure as Code (IaC) 模板，定义了整个应用的 AWS 基础设施
+# CloudFormation 是 AWS 的资源编排服务，可以通过代码管理云资源
+# 
+# 本模板创建的资源：
+# 1. VPC 网络：私有云网络环境，确保资源隔离和安全
+# 2. 子网：公有子网（NAT网关）和私有子网（数据库、Lambda）
+# 3. RDS PostgreSQL：托管数据库服务
+# 4. ElastiCache Redis：内存缓存服务
+# 5. S3 存储桶：对象存储服务
+# 6. 安全组：网络访问控制
+# 7. IAM 角色：权限管理
+# 
+# 设计原则：
+# - 安全优先：数据库放在私有子网，Lambda 通过 VPC 访问
+# - 高可用性：跨多个可用区部署
+# - 成本优化：使用适合开发环境的实例类型
+# - 可扩展性：为生产环境扩容预留空间
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Fake WeChat 学习环境基础设施 CloudFormation 模板 - 创建 VPC、数据库、缓存等核心资源'
+
+# CloudFormation 参数定义
+# 参数允许在部署时自定义配置，提高模板的灵活性和重用性
+Parameters:
+  # 部署环境参数
+  Environment:
+    Type: String
+    Default: dev                              # 默认开发环境
+    AllowedValues: [dev, staging, production] # 限制可选值
+    Description: 部署环境标识，影响资源命名和配置
+  
+  # 数据库密码参数
+  DatabasePassword:
+    Type: String
+    NoEcho: true                             # 隐藏参数值，增强安全性
+    Description: PostgreSQL 数据库主用户密码
+    MinLength: 8                             # 最小密码长度
+    Default: DevPassword123!                 # 开发环境默认密码（生产环境需修改）
+    # 密码要求：至少8位，包含大小写字母、数字和特殊字符
+  
+  # 项目名称参数
+  ProjectName:
+    Type: String
+    Default: fake-wechat
+    Description: 项目名称，用于资源命名和标签
+
+# AWS 资源定义
+# 按照依赖关系顺序定义资源：网络 -> 安全 -> 数据库 -> 计算 -> 存储
+Resources:
+  # ========== 网络基础设施 ==========
+  
+  # 虚拟私有云 (VPC)
+  # 为应用创建隔离的网络环境，类似于传统数据中心的专用网络
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16                 # 私有 IP 地址范围：10.0.0.1 - 10.0.255.254
+      EnableDnsHostnames: true               # 启用 DNS 主机名解析
+      EnableDnsSupport: true                 # 启用 DNS 支持
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-${ProjectName}-vpc  # 动态名称：dev-fake-wechat-vpc
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "应用网络隔离和安全边界"
+
+  # 公共子网 1 - 第一个可用区
+  # 公共子网允许资源直接访问互联网，用于 NAT 网关、负载均衡器等
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24                 # 子网地址范围：10.0.1.1 - 10.0.1.254
+      AvailabilityZone: !Select [0, !GetAZs '']  # 选择第一个可用区
+      MapPublicIpOnLaunch: true               # 自动分配公网 IP
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-public-subnet-1
+        - Key: Type
+          Value: Public
+        - Key: Purpose
+          Value: "NAT网关和互联网访问资源"
+
+  # 公共子网 2 - 第二个可用区
+  # 多可用区部署确保高可用性和容灾能力
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24                 # 子网地址范围：10.0.2.1 - 10.0.2.254
+      AvailabilityZone: !Select [1, !GetAZs '']  # 选择第二个可用区
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-public-subnet-2
+        - Key: Type
+          Value: Public
+
+  # 私有子网 1 - 第一个可用区
+  # 私有子网不允许直接访问互联网，提供更高的安全性
+  # 用于部署数据库、Lambda 函数等敏感资源
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24                 # 子网地址范围：10.0.3.1 - 10.0.3.254
+      AvailabilityZone: !Select [0, !GetAZs '']  # 与公共子网1在同一可用区
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-private-subnet-1
+        - Key: Type
+          Value: Private
+        - Key: Purpose
+          Value: "数据库和Lambda函数安全运行环境"
+
+  # 私有子网 2 - 第二个可用区
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24                 # 子网地址范围：10.0.4.1 - 10.0.4.254
+      AvailabilityZone: !Select [1, !GetAZs '']  # 与公共子网2在同一可用区
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-private-subnet-2
+        - Key: Type
+          Value: Private
+
+  # ========== 网络连接组件 ==========
+  
+  # 互联网网关 (Internet Gateway)
+  # 允许 VPC 中的资源访问互联网
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-igw
+        - Key: Purpose
+          Value: "VPC互联网访问入口"
+
+  # VPC 网关连接
+  # 将互联网网关附加到 VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # ========== 路由配置 ==========
+  
+  # 公共路由表
+  # 定义公共子网的网络路由规则
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-public-rt
+        - Key: Purpose
+          Value: "公共子网路由控制"
+
+  # 公共路由
+  # 将所有外部流量（0.0.0.0/0）路由到互联网网关
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment          # 确保网关连接完成后再创建路由
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0        # 所有 IP 地址
+      GatewayId: !Ref InternetGateway
+
+  # 公共子网路由表关联
+  # 将公共子网与路由表关联
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ========== 数据库相关资源 ==========
+  
+  # 数据库子网组
+  # RDS 要求至少两个不同可用区的子网，确保高可用性
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS database instances
+      SubnetIds:
+        - !Ref PrivateSubnet1             # 第一个私有子网
+        - !Ref PrivateSubnet2             # 第二个私有子网
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-db-subnet-group
+        - Key: Purpose
+          Value: "RDS数据库高可用性部署"
+
+  # ========== 安全组配置 ==========
+  
+  # 数据库安全组
+  # 控制对 RDS 数据库的网络访问权限
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS PostgreSQL database access control
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432                  # PostgreSQL 默认端口
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup  # 只允许 Lambda 安全组访问
+          Description: "Allow Lambda functions to access PostgreSQL database"
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-db-sg
+        - Key: Purpose
+          Value: "数据库网络访问控制"
+
+  # Lambda 函数安全组
+  # 控制 Lambda 函数的网络访问权限
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions VPC network access
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1                  # 允许所有出站流量
+          CidrIp: 0.0.0.0/0               # 向所有 IP 地址
+          Description: "Allow Lambda to access internet and VPC resources"
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-lambda-sg
+        - Key: Purpose
+          Value: "Lambda函数VPC网络访问"
+
+  # ========== RDS PostgreSQL 数据库 ==========
+  
+  # 主数据库实例
+  # 使用 AWS 托管的 PostgreSQL 服务，提供高可用性和自动备份
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${Environment}-${ProjectName}-db
+      DBInstanceClass: db.t3.micro        # 实例类型：适合开发环境的小型实例
+      Engine: postgres                    # 数据库引擎：PostgreSQL
+      EngineVersion: '15.4'               # PostgreSQL 版本号
+      AllocatedStorage: 20                # 存储空间：20GB（免费层上限）
+      StorageType: gp2                    # 存储类型：通用 SSD
+      
+      # 数据库初始配置
+      DBName: fakewechat                  # 初始数据库名
+      MasterUsername: postgres            # 主用户名
+      MasterUserPassword: !Ref DatabasePassword  # 主用户密码
+      
+      # 网络和安全配置
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      
+      # 备份和维护配置
+      BackupRetentionPeriod: 7            # 备份保留时间：7天
+      PreferredBackupWindow: '03:00-04:00'  # 备份时间窗口（UTC）
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'  # 维护时间窗口
+      
+      # 安全和加密
+      StorageEncrypted: true              # 启用存储加密
+      DeletionProtection: false           # 开发环境允许删除（生产环境应设为 true）
+      
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-${ProjectName}-database
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "主数据库存储用户和应用数据"
+
+  # ========== ElastiCache Redis 缓存 ==========
+  
+  # ElastiCache 子网组
+  # 与 RDS 类似，ElastiCache 也需要多可用区部署
+  ElastiCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnet group for ElastiCache Redis cluster
+      SubnetIds:
+        - !Ref PrivateSubnet1             # 第一个私有子网
+        - !Ref PrivateSubnet2             # 第二个私有子网
+
+  # ElastiCache 安全组
+  # 控制对 Redis 缓存的网络访问权限
+  ElastiCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ElastiCache Redis cluster access control
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379                  # Redis 默认端口
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup  # 只允许 Lambda 安全组访问
+          Description: "Allow Lambda functions to access Redis cache"
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-elasticache-sg
+        - Key: Purpose
+          Value: "Redis缓存网络访问控制"
+
+  # ElastiCache Redis 集群
+  # 提供高性能内存缓存服务，用于会话管理和数据缓存
+  ElastiCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      ClusterName: !Sub ${Environment}-${ProjectName}-redis
+      CacheNodeType: cache.t3.micro       # 实例类型：适合开发环境的小型实例
+      Engine: redis                       # 缓存引擎：Redis
+      NumCacheNodes: 1                    # 节点数量：1个（开发环境）
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref ElastiCacheSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-redis-cluster
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "会话管理和高速数据缓存"
+
+  # ========== S3 对象存储 ==========
+  
+  # S3 媒体文件存储桶
+  # 用于存储用户头像、聊天图片、文件等静态资源
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # 存储桶名称必须全局唯一，添加账户 ID 确保唯一性
+      BucketName: !Sub ${Environment}-${ProjectName}-media-${AWS::AccountId}
+      
+      # 加密配置
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256        # 使用 AES-256 加密
+              
+      # 公共访问阻止配置（增强安全性）
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true             # 阻止公共 ACL
+        BlockPublicPolicy: true           # 阻止公共策略
+        IgnorePublicAcls: true            # 忽略公共 ACL
+        RestrictPublicBuckets: true       # 限制公共存储桶
+        
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-media-bucket
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "存储用户上传的媒体文件和静态资源"
+
+  # ========== IAM 权限管理 ==========
+  
+  # Lambda 执行角色
+  # 定义 Lambda 函数需要的 AWS 服务访问权限
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-${ProjectName}-lambda-role
+      
+      # 信任策略：允许 Lambda 服务承担此角色
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com  # AWS Lambda 服务
+            Action: sts:AssumeRole
+            
+      # AWS 托管策略：VPC 访问所需的基本权限
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        
+      # 自定义策略：应用特定的服务访问权限
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 对象操作权限
+              - Effect: Allow
+                Action:
+                  - s3:GetObject      # 下载文件
+                  - s3:PutObject      # 上传文件
+                  - s3:DeleteObject   # 删除文件
+                Resource: !Sub "${MediaBucket.Arn}/*"
+              # S3 存储桶列表权限
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket     # 列出存储桶内容
+                Resource: !GetAtt MediaBucket.Arn
+                
+      Tags:
+        - Key: Name
+          Value: !Sub ${Environment}-lambda-execution-role
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: "Lambda函数执行所需的最小权限集合"
+
+# ========== CloudFormation 输出 ==========
+# 输出值可以被其他 CloudFormation 堆栈或应用引用
+# 这些值在部署完成后会显示在 AWS 控制台中
+Outputs:
+  # VPC 网络资源输出
+  VPCId:
+    Description: 主 VPC 的资源 ID，用于其他资源引用
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${Environment}-VPC-ID    # 导出名称，其他堆栈可以通过 !ImportValue 引用
+
+  # 私有子网输出（Lambda 部署时需要）
+  PrivateSubnet1:
+    Description: 第一个私有子网 ID，Lambda 函数部署在此子网
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${Environment}-PrivateSubnet1-ID
+
+  PrivateSubnet2:
+    Description: 第二个私有子网 ID，提供高可用性支持
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${Environment}-PrivateSubnet2-ID
+
+  # Lambda 安全组输出
+  LambdaSecurityGroup:
+    Description: Lambda 函数使用的安全组 ID
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub ${Environment}-LambdaSecurityGroup-ID
+
+  # 数据库连接信息输出
+  DatabaseEndpoint:
+    Description: PostgreSQL 数据库连接端点地址
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub ${Environment}-Database-Endpoint
+
+  DatabasePort:
+    Description: PostgreSQL 数据库端口号（通常为 5432）
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub ${Environment}-Database-Port
+
+  # Redis 缓存连接信息输出
+  RedisEndpoint:
+    Description: Redis 缓存集群连接端点地址
+    Value: !GetAtt ElastiCacheCluster.RedisEndpoint.Address
+    Export:
+      Name: !Sub ${Environment}-Redis-Endpoint
+
+  # S3 存储资源输出
+  MediaBucketName:
+    Description: S3 媒体文件存储桶名称
+    Value: !Ref MediaBucket
+    Export:
+      Name: !Sub ${Environment}-Media-Bucket-Name
+
+  # IAM 角色输出
+  LambdaExecutionRoleArn:
+    Description: Lambda 函数执行角色的 ARN，Serverless Framework 部署时使用
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub ${Environment}-Lambda-Execution-Role-ARN

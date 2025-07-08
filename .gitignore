@@ -18,6 +18,11 @@ build/
 .env.test.local
 .env.production.local
 
+# Deployment environment files
+deployment/.env.*
+deployment/.api-info
+deployment/.cloudflare-info
+
 # IDE files
 .vscode/
 .idea/

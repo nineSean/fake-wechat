@@ -1,0 +1,69 @@
+# Cloudflare Workers 配置文件
+# 
+# Wrangler 是 Cloudflare Workers 的命令行工具，类似于 AWS CLI
+# 这个文件定义了 Workers 的部署配置、资源绑定和环境变量
+# 
+# 主要功能：
+# 1. Workers 脚本配置（入口文件、兼容性等）
+# 2. KV 存储绑定（类似于 Redis的键值存储）
+# 3. R2 存储绑定（类似于 S3 的对象存储）
+# 4. 环境变量和路由配置
+# 5. 多环境管理（dev/production）
+
+# Workers 基本信息
+name = "fake-wechat-api"              # Workers 名称（生产环境）
+main = "src/index.ts"                # 入口文件：TypeScript 源码
+compatibility_date = "2024-01-01"    # 兼容性日期：锁定 Workers 运行时版本
+compatibility_flags = ["nodejs_compat"] # 启用 Node.js 兼容性（支持 Node.js API）
+
+# 开发环境配置
+# 在开发过程中使用，避免影响生产环境
+[env.dev]
+name = "fake-wechat-api-dev"         # 开发环境 Workers 名称
+
+# 生产环境配置（如果有域名）
+# 可以绑定自定义域名，提供更专业的 API 地址
+[env.production]
+name = "fake-wechat-api"             # 生产环境 Workers 名称
+routes = [
+  "api.your-domain.com/*"            # 自定义域名路由（需要首先在 Cloudflare 添加域名）
+]
+
+# KV 存储绑定（键值存储）
+# KV 是 Cloudflare 的全球分布式键值存储，类似于 Redis
+# 用于存储用户会话、缓存数据等
+# 注意：需要先创建 KV 命名空间才能获取 ID
+
+# 用户会话存储
+[[kv_namespaces]]
+binding = "USER_SESSIONS"             # 在代码中的变量名
+id = "请运行 wrangler kv:namespace create USER_SESSIONS 获取"  # 生产环境 KV ID
+preview_id = "请运行 wrangler kv:namespace create USER_SESSIONS --preview 获取"  # 预览环境 KV ID
+
+# 缓存数据存储
+[[kv_namespaces]]
+binding = "CACHE"                     # 在代码中的变量名
+id = "请运行 wrangler kv:namespace create CACHE 获取"        # 生产环境 KV ID
+preview_id = "请运行 wrangler kv:namespace create CACHE --preview 获取"        # 预览环境 KV ID
+
+# R2 存储绑定（对象存储）
+# R2 是 Cloudflare 的对象存储服务，类似于 AWS S3
+# 用于存储用户头像、图片、文件等媒体内容
+# 相比 S3，R2 没有出站流量费用
+[[r2_buckets]]
+binding = "MEDIA_STORAGE"             # 在代码中的变量名
+bucket_name = "dev-fake-wechat-media" # R2 存储桶名称
+
+# 环境变量（开发环境）
+# 这些变量在 Workers 代码中可以通过 env 对象访问
+[vars]
+ENVIRONMENT = "development"           # 当前运行环境
+AWS_API_GATEWAY_URL = "请替换为实际的 API Gateway URL"  # AWS Lambda API 地址
+JWT_SECRET = "dev-jwt-secret-please-change-in-production"  # JWT 令牌加密密钥（开发环境）
+
+# 生产环境变量
+# 生产环境应使用更安全的配置和密钥
+[env.production.vars]
+ENVIRONMENT = "production"            # 生产环境标识
+AWS_API_GATEWAY_URL = "请替换为生产环境的 API Gateway URL"  # 生产环境 API 地址
+JWT_SECRET = "请替换为生产环境的 JWT Secret"                # 生产环境 JWT 密钥（需要更强密钥）

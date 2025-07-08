@@ -1,0 +1,185 @@
+# Serverless Framework 配置文件 - AWS Lambda 部署
+# 
+# 这个配置文件是 Serverless Framework 的核心配置，定义了如何将应用部署到 AWS Lambda
+# Serverless Framework 是一个无服务器应用程序框架，简化了 AWS Lambda 的部署过程
+# 
+# 主要功能：
+# 1. 定义 Lambda 函数和触发器
+# 2. 配置 VPC、环境变量、权限等
+# 3. 管理 API Gateway 路由
+# 4. 自动创建和管理 CloudFormation 堆栈
+# 5. 集成 Webpack 进行代码打包
+
+# 服务基本信息
+service: fake-wechat-backend  # 服务名称，会影响资源命名
+frameworkVersion: '3'         # Serverless Framework 版本
+
+# 云提供商配置
+provider:
+  name: aws                              # 云提供商：AWS
+  runtime: nodejs18.x                    # 运行时：Node.js 18.x LTS
+  region: us-east-1                      # AWS 区域：美国东部（弗吉尼亚）
+  stage: ${opt:stage, 'dev'}             # 部署阶段：从命令行参数获取，默认 'dev'
+  timeout: 30                            # 函数超时时间：30秒
+  memorySize: 512                        # 内存大小：512MB（平衡性能和成本）
+  
+  # 环境变量：Lambda 函数运行时可以访问的环境变量
+  # 这些变量会从 .env 文件或环境中读取
+  environment:
+    NODE_ENV: ${self:provider.stage}      # Node.js 环境：dev/staging/production
+    DATABASE_URL: ${env:DATABASE_URL}      # PostgreSQL 数据库连接 URL
+    REDIS_URL: ${env:REDIS_URL}            # Redis 缓存连接 URL
+    JWT_SECRET: ${env:JWT_SECRET}          # JWT 令牌加密密钥
+    AWS_S3_BUCKET: ${env:AWS_S3_BUCKET}    # S3 存储桶名称
+    CLOUDFLARE_R2_BUCKET: ${env:CLOUDFLARE_R2_BUCKET}  # Cloudflare R2 存储桶
+  
+  # VPC 配置：让 Lambda 函数运行在私有网络中
+  # 这样可以安全地访问 RDS 数据库和 ElastiCache Redis
+  vpc:
+    # 安全组：控制网络访问权限
+    securityGroupIds:
+      # 从 CloudFormation 堆栈获取 Lambda 安全组 ID
+      - ${cf:fake-wechat-infrastructure.LambdaSecurityGroup}
+    # 子网：Lambda 函数将在这些子网中运行
+    subnetIds:
+      # 私有子网 1 和 2，确保高可用性
+      - ${cf:fake-wechat-infrastructure.PrivateSubnet1}
+      - ${cf:fake-wechat-infrastructure.PrivateSubnet2}
+  
+  # IAM 权限声明：定义 Lambda 函数需要的 AWS 服务权限
+  # 遵循最小权限原则，只授予必要的权限
+  iamRoleStatements:
+    # S3 存储桶访问权限：用于文件上传和下载
+    - Effect: Allow
+      Action:
+        - s3:GetObject      # 下载文件
+        - s3:PutObject      # 上传文件
+        - s3:DeleteObject   # 删除文件
+      Resource: "arn:aws:s3:::${env:AWS_S3_BUCKET}/*"
+    
+    # SQS 队列访问权限：用于异步消息处理
+    - Effect: Allow
+      Action:
+        - sqs:SendMessage     # 发送消息
+        - sqs:ReceiveMessage  # 接收消息
+        - sqs:DeleteMessage   # 删除消息
+      Resource: "arn:aws:sqs:${self:provider.region}:*:*"
+    
+    # CloudWatch 日志权限：用于函数日志记录
+    - Effect: Allow
+      Action:
+        - logs:CreateLogGroup   # 创建日志组
+        - logs:CreateLogStream  # 创建日志流
+        - logs:PutLogEvents     # 写入日志事件
+      Resource: "arn:aws:logs:${self:provider.region}:*:*"
+
+# Lambda 函数定义
+# 每个函数都有自己的处理器、事件触发器和配置
+functions:
+  # 统一 API 入口函数：处理所有 HTTP 请求
+  # 这种设计简化了部署，所有 API 路由都由一个函数处理
+  api:
+    handler: src/lambda.handler           # 处理器函数：src/lambda.js 的 handler 导出
+    events:
+      - http:
+          path: /{proxy+}                 # 路径：匹配所有路径（代理模式）
+          method: ANY                     # 方法：匹配所有 HTTP 方法
+          cors:
+            origin: '*'                   # CORS：允许所有源
+            headers:                      # 允许的请求头
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false       # 不允许凭证
+    environment:
+      SERVICE_NAME: api-service           # 服务标识符
+
+  # 健康检查函数：提供服务状态检查端点
+  # 用于监控和负载均衡器的健康检查
+  health:
+    handler: src/health.handler           # 处理器函数：src/health.js 的 handler 导出
+    events:
+      - http:
+          path: /health                   # 路径：/health
+          method: GET                     # 方法：GET
+          cors: true                      # 启用 CORS
+    environment:
+      SERVICE_NAME: health-check          # 服务标识符
+
+  # WebSocket 连接管理函数（可选）
+  # 用于实时消息功能，如聊天和通知
+  websocket:
+    handler: src/websocket.handler        # 处理器函数：src/websocket.js 的 handler 导出
+    events:
+      - websocket:
+          route: $connect                 # WebSocket 连接事件
+      - websocket:
+          route: $disconnect              # WebSocket 断开事件
+      - websocket:
+          route: $default                 # WebSocket 默认消息事件
+    environment:
+      SERVICE_NAME: websocket-service     # 服务标识符
+
+# Serverless Framework 插件
+# 插件扩展了 Serverless Framework 的功能
+plugins:
+  - serverless-webpack        # Webpack 集成：代码打包和优化
+  - serverless-offline        # 本地开发服务器：模拟 Lambda 和 API Gateway
+  - serverless-dotenv-plugin  # 环境变量管理：从 .env 文件加载变量
+
+# 插件自定义配置
+custom:
+  # Webpack 配置
+  webpack:
+    webpackConfig: ./webpack.config.js   # Webpack 配置文件路径
+    includeModules:
+      forceExclude:
+        - aws-sdk                         # 排除 AWS SDK（Lambda 运行时已提供）
+    packager: 'npm'                       # 包管理器：npm
+    excludeFiles: src/**/*.test.js        # 排除测试文件
+  
+  # 本地开发配置
+  serverless-offline:
+    httpPort: 3001                        # HTTP 端口：3001
+    websocketPort: 3002                   # WebSocket 端口：3002
+    host: 0.0.0.0                         # 绑定地址：所有接口
+    
+  # 环境变量加载配置
+  dotenv:
+    path: ../.env.dev                     # 环境变量文件路径
+    include:                              # 包含的环境变量
+      - DATABASE_URL
+      - REDIS_URL
+      - JWT_SECRET
+      - AWS_S3_BUCKET
+      - CLOUDFLARE_R2_BUCKET
+
+# CloudFormation 资源（如果需要额外资源）
+# 这里可以定义 Serverless Framework 未涵盖的 AWS 资源
+resources:
+  Resources:
+    # SQS 队列：用于异步任务处理
+    # 例如：发送邮件、推送通知、图像处理等
+    MessageQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:provider.stage}-fake-wechat-messages
+        VisibilityTimeoutSeconds: 60      # 消息可见性超时：60秒
+        MessageRetentionPeriod: 1209600   # 消息保留期：14天
+        
+  # CloudFormation 输出：可以被其他堆栈引用的值
+  Outputs:
+    # API Gateway REST API ID
+    ApiGatewayRestApiId:
+      Value:
+        Ref: ApiGatewayRestApi
+    
+    # API Gateway 根资源 ID
+    ApiGatewayRestApiRootResourceId:
+      Value:
+        Fn::GetAtt:
+          - ApiGatewayRestApi
+          - RootResourceId

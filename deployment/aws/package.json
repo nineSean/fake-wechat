@@ -1,0 +1,29 @@
+{
+  "name": "fake-wechat-aws-deploy",
+  "version": "1.0.0",
+  "description": "AWS Lambda deployment package for fake-wechat backend",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f auth",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "serverless": "^3.38.0",
+    "serverless-webpack": "^5.13.0",
+    "serverless-offline": "^13.3.0",
+    "serverless-dotenv-plugin": "^6.0.0",
+    "webpack": "^5.88.0",
+    "webpack-node-externals": "^3.0.0"
+  },
+  
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@prisma/client": "^5.22.0",
+    "aws-lambda": "^1.0.7",
+    "aws-serverless-express": "^3.4.0"
+  }
+}

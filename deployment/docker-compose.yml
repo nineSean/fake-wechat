@@ -1,0 +1,94 @@
+# Docker Compose 配置文件 - 本地开发环境
+# 
+# 这个文件定义了本地开发所需的所有服务
+# 使用 Docker Compose 可以一键启动整个开发环境
+# 
+# 优势：
+# 1. 环境一致性：所有开发者使用相同的数据库和缓存版本
+# 2. 快速启动：一个命令启动所有服务
+# 3. 隔离性：不影响本地系统环境
+# 4. 数据持久化：数据存储在 Docker 卷中，重启后保持
+
+version: '3.8'  # Docker Compose 文件版本
+
+services:
+  # PostgreSQL 数据库服务
+  # 主数据库，存储用户信息、消息记录、好友关系等
+  postgres:
+    image: postgres:15                # 使用官方 PostgreSQL 15 镜像
+    environment:
+      POSTGRES_DB: fakewechat        # 数据库名称
+      POSTGRES_USER: postgres        # 数据库用户名
+      POSTGRES_PASSWORD: password    # 数据库密码（开发环境简单密码）
+    ports:
+      - "5432:5432"                 # 端口映射：主机:5432 -> 容器:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # 数据持久化存储
+
+  # Redis 缓存服务
+  # 用于会话管理、缓存数据、实时通信等
+  redis:
+    image: redis:7-alpine           # 使用轻量级 Alpine Linux 版本
+    ports:
+      - "6379:6379"                 # 端口映射：主机:6379 -> 容器:6379
+    volumes:
+      - redis_data:/data             # 数据持久化存储
+    # 可选：添加 Redis 配置
+    # command: redis-server --appendonly yes  # 启用 AOF 持久化
+
+  # 后端 API 服务
+  # 基于 NestJS 的 Node.js 后端应用
+  backend:
+    build:
+      context: ../backend            # 构建上下文：后端目录
+      dockerfile: Dockerfile         # Dockerfile 文件名
+    environment:
+      # 数据库连接字符串（容器内部网络）
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/fakewechat
+      # Redis 连接字符串（容器内部网络）
+      REDIS_URL: redis://redis:6379
+      # JWT 加密密钥（开发环境）
+      JWT_SECRET: local-jwt-secret
+      # Node.js 运行环境
+      NODE_ENV: development
+    ports:
+      - "3001:3001"                 # API 服务端口
+    depends_on:
+      - postgres                     # 依赖 PostgreSQL 服务
+      - redis                        # 依赖 Redis 服务
+    volumes:
+      - ../backend:/app              # 源码映射（支持热重载）
+      - /app/node_modules            # 排除 node_modules 映射
+
+  # 前端开发服务
+  # 基于 Next.js 的 React 应用
+  frontend:
+    build:
+      context: ../frontend           # 构建上下文：前端目录
+      dockerfile: Dockerfile         # Dockerfile 文件名
+    environment:
+      # API 服务地址（通过主机网络访问）
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      # Node.js 运行环境
+      NODE_ENV: development
+    ports:
+      - "3000:3000"                 # 前端开发服务器端口
+    depends_on:
+      - backend                      # 依赖后端服务
+    volumes:
+      - ../frontend:/app             # 源码映射（支持热重载）
+      - /app/node_modules            # 排除 node_modules 映射
+      # 可选：映射 .next 构建目录以加速重新构建
+      # - /app/.next
+
+# Docker 数据卷定义
+# 用于数据持久化存储，确保容器重启后数据不丢失
+volumes:
+  postgres_data:    # PostgreSQL 数据存储卷
+  redis_data:       # Redis 数据存储卷
+
+# 使用说明：
+# 启动所有服务： docker-compose up -d
+# 查看日志：   docker-compose logs -f
+# 停止服务：   docker-compose down
+# 重新构建：   docker-compose up --build
