@@ -28,6 +28,9 @@ interface Friend {
   avatarUrl?: string;
   bio?: string;
   lastLoginAt?: string;
+  isOnline?: boolean;
+  lastSeenAt?: string;
+  onlineStatus?: string;
 }
 
 export default function FriendsPage() {
@@ -37,6 +40,7 @@ export default function FriendsPage() {
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -44,7 +48,10 @@ export default function FriendsPage() {
   useEffect(() => {
     fetchFriends();
     fetchFriendRequests();
-  }, []);
+    if (activeTab === 'blocked') {
+      fetchBlockedUsers();
+    }
+  }, [activeTab]);
 
   const fetchFriends = async () => {
     try {
@@ -125,6 +132,56 @@ export default function FriendsPage() {
     }
   };
 
+  const fetchBlockedUsers = async () => {
+    try {
+      const data = await apiRequest('/friends/blocked');
+      setBlockedUsers(data.blockedUsers);
+    } catch (err: any) {
+      console.error('获取拉黑列表失败:', err);
+    }
+  };
+
+  const blockUser = async (userId: string) => {
+    if (!confirm('确定要拉黑这个用户吗？拉黑后将解除好友关系。')) return;
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiRequest(`/friends/${userId}/block`, {
+        method: 'POST',
+      });
+      setSuccess('已拉黑用户');
+      await fetchFriends();
+      await fetchBlockedUsers();
+    } catch (err: any) {
+      setError(err.message || '拉黑用户失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const unblockUser = async (userId: string) => {
+    if (!confirm('确定要取消拉黑这个用户吗？')) return;
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiRequest(`/friends/${userId}/block`, {
+        method: 'DELETE',
+      });
+      setSuccess('已取消拉黑');
+      await fetchBlockedUsers();
+    } catch (err: any) {
+      setError(err.message || '取消拉黑失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const deleteFriend = async (friendId: string) => {
     if (!confirm('确定要删除这个好友吗？')) return;
 
@@ -158,10 +215,37 @@ export default function FriendsPage() {
     return user.friendshipStatus === 1 || user.isPendingRequest || user.friendshipStatus === 3;
   };
 
+  const getOnlineStatusText = (onlineStatus?: string) => {
+    switch (onlineStatus) {
+      case 'online':
+        return '在线';
+      case 'recently':
+        return '刚刚在线';
+      case 'unknown':
+        return '';
+      case 'long_ago':
+        return '很久未上线';
+      default:
+        return onlineStatus || '';
+    }
+  };
+
+  const getOnlineStatusColor = (onlineStatus?: string) => {
+    switch (onlineStatus) {
+      case 'online':
+        return 'text-green-500';
+      case 'recently':
+        return 'text-green-400';
+      default:
+        return 'text-gray-400';
+    }
+  };
+
   const tabs = [
     { id: 'friends', label: `好友 (${friends.length})` },
     { id: 'requests', label: `好友请求 (${friendRequests.length})` },
     { id: 'search', label: '添加好友' },
+    { id: 'blocked', label: `拉黑列表 (${blockedUsers.length})` },
   ];
 
   return (
@@ -245,6 +329,11 @@ export default function FriendsPage() {
                             <p className="text-sm font-medium text-gray-900">{friend.nickname}</p>
                             <p className="text-sm text-gray-500">@{friend.username}</p>
                             {friend.bio && <p className="text-xs text-gray-400 mt-1">{friend.bio}</p>}
+                            {friend.onlineStatus && (
+                              <p className={`text-xs mt-1 ${getOnlineStatusColor(friend.onlineStatus)}`}>
+                                {getOnlineStatusText(friend.onlineStatus)}
+                              </p>
+                            )}
                           </div>
                         </div>
                         <div className="flex space-x-2">
@@ -253,6 +342,13 @@ export default function FriendsPage() {
                             className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
                           >
                             聊天
+                          </button>
+                          <button
+                            onClick={() => blockUser(friend.id)}
+                            className="px-3 py-1 text-sm bg-yellow-600 text-white rounded hover:bg-yellow-700"
+                            disabled={loading}
+                          >
+                            拉黑
                           </button>
                           <button
                             onClick={() => deleteFriend(friend.id)}
@@ -392,6 +488,52 @@ export default function FriendsPage() {
 
                 {searchQuery && !loading && searchResults.length === 0 && (
                   <p className="text-center text-gray-500 py-8">未找到相关用户</p>
+                )}
+              </div>
+            )}
+
+            {/* 拉黑列表 */}
+            {activeTab === 'blocked' && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-gray-900">拉黑列表</h3>
+                {blockedUsers.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">暂无拉黑用户</p>
+                ) : (
+                  <div className="space-y-4">
+                    {blockedUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-100">
+                            {user.avatarUrl ? (
+                              <img
+                                className="h-12 w-12 rounded-full object-cover"
+                                src={getAvatarUrl(user.avatarUrl) || ''}
+                                alt="头像"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-full flex items-center justify-center bg-gray-100 text-gray-400">
+                                <span className="text-sm font-medium">
+                                  {user.nickname?.charAt(0) || '用'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{user.nickname}</p>
+                            <p className="text-sm text-gray-500">@{user.username}</p>
+                            {user.bio && <p className="text-xs text-gray-400 mt-1">{user.bio}</p>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => unblockUser(user.id)}
+                          className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                          disabled={loading}
+                        >
+                          取消拉黑
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

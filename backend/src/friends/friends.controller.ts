@@ -81,4 +81,39 @@ export class FriendsController {
     this.logger.log(`User ${req.user.id} deleting friend ${friendId}`);
     return this.friendsService.deleteFriend(req.user.id, friendId);
   }
+
+  @Post('online-status')
+  @ApiOperation({ summary: 'Update user online status' })
+  @ApiResponse({ status: 200, description: 'Online status updated' })
+  updateOnlineStatus(@Request() req, @Body() body: { isOnline: boolean }) {
+    this.logger.log(`User ${req.user.id} updating online status to ${body.isOnline}`);
+    return this.friendsService.updateOnlineStatus(req.user.id, body.isOnline);
+  }
+
+  @Post(':userId/block')
+  @ApiOperation({ summary: 'Block user' })
+  @ApiResponse({ status: 201, description: 'User blocked successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot block yourself' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  blockUser(@Request() req, @Param('userId') userId: string) {
+    this.logger.log(`User ${req.user.id} blocking user ${userId}`);
+    return this.friendsService.blockUser(req.user.id, userId);
+  }
+
+  @Delete(':userId/block')
+  @ApiOperation({ summary: 'Unblock user' })
+  @ApiResponse({ status: 200, description: 'User unblocked successfully' })
+  @ApiResponse({ status: 404, description: 'Block record not found' })
+  unblockUser(@Request() req, @Param('userId') userId: string) {
+    this.logger.log(`User ${req.user.id} unblocking user ${userId}`);
+    return this.friendsService.unblockUser(req.user.id, userId);
+  }
+
+  @Get('blocked')
+  @ApiOperation({ summary: 'Get blocked users list' })
+  @ApiResponse({ status: 200, description: 'Blocked users list retrieved' })
+  getBlockedUsers(@Request() req, @Query() query: GetFriendsDto) {
+    this.logger.log(`Getting blocked users for user ${req.user.id}`);
+    return this.friendsService.getBlockedUsers(req.user.id, query);
+  }
 }

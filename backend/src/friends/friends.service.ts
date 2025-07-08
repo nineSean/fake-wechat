@@ -167,28 +167,81 @@ export class FriendsService {
               avatarUrl: true,
               bio: true,
               lastLoginAt: true,
+              isOnline: true,
+              lastSeenAt: true,
             },
           },
         },
         skip: offset,
         take: limit,
-        orderBy: {
-          friend: {
-            lastLoginAt: 'desc',
+        orderBy: [
+          {
+            friend: {
+              isOnline: 'desc', // 在线用户优先
+            },
           },
-        },
+          {
+            friend: {
+              lastSeenAt: 'desc', // 然后按最后上线时间排序
+            },
+          },
+        ],
       }),
       this.prisma.friendship.count({ where: whereCondition }),
     ]);
 
     return {
-      friends: friends.map(f => f.friend),
+      friends: friends.map(f => ({
+        ...f.friend,
+        onlineStatus: this.getOnlineStatus(f.friend.isOnline, f.friend.lastSeenAt),
+      })),
       meta: {
         total,
         page: Math.floor(offset / limit) + 1,
         limit,
       },
     };
+  }
+
+  // 获取在线状态描述
+  private getOnlineStatus(isOnline: boolean, lastSeenAt: Date | null): string {
+    if (isOnline) {
+      return 'online';
+    }
+
+    if (!lastSeenAt) {
+      return 'unknown';
+    }
+
+    const now = new Date();
+    const diffMs = now.getTime() - lastSeenAt.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 5) {
+      return 'recently';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes}分钟前`;
+    } else if (diffHours < 24) {
+      return `${diffHours}小时前`;
+    } else if (diffDays < 7) {
+      return `${diffDays}天前`;
+    } else {
+      return 'long_ago';
+    }
+  }
+
+  // 更新用户在线状态
+  async updateOnlineStatus(userId: string, isOnline: boolean) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isOnline,
+        lastSeenAt: new Date(),
+        ...(isOnline && { lastLoginAt: new Date() }),
+      },
+    });
   }
 
   // 删除好友
@@ -243,5 +296,122 @@ export class FriendsService {
         createdAt: 'desc',
       },
     });
+  }
+
+  // 拉黑用户
+  async blockUser(userId: string, targetUserId: string) {
+    // 不能拉黑自己
+    if (userId === targetUserId) {
+      throw new BadRequestException('Cannot block yourself');
+    }
+
+    // 检查目标用户是否存在
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId, isActive: true },
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 删除现有的好友关系（如果存在）
+    await this.prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { userId, friendId: targetUserId },
+          { userId: targetUserId, friendId: userId },
+        ],
+      },
+    });
+
+    // 创建拉黑记录
+    return this.prisma.friendship.create({
+      data: {
+        userId,
+        friendId: targetUserId,
+        status: 3, // blocked
+      },
+      include: {
+        friend: {
+          select: {
+            id: true,
+            username: true,
+            nickname: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+  }
+
+  // 取消拉黑
+  async unblockUser(userId: string, targetUserId: string) {
+    const blockRecord = await this.prisma.friendship.findFirst({
+      where: {
+        userId,
+        friendId: targetUserId,
+        status: 3, // blocked
+      },
+    });
+
+    if (!blockRecord) {
+      throw new NotFoundException('Block record not found');
+    }
+
+    await this.prisma.friendship.delete({
+      where: { id: blockRecord.id },
+    });
+
+    return { success: true };
+  }
+
+  // 获取拉黑列表
+  async getBlockedUsers(userId: string, query: GetFriendsDto) {
+    const { q, limit = 20, offset = 0 } = query;
+
+    const whereCondition = {
+      userId,
+      status: 3, // blocked
+      ...(q && {
+        friend: {
+          OR: [
+            { username: { contains: q, mode: 'insensitive' as const } },
+            { nickname: { contains: q, mode: 'insensitive' as const } },
+          ],
+        },
+      }),
+    };
+
+    const [blockedUsers, total] = await Promise.all([
+      this.prisma.friendship.findMany({
+        where: whereCondition,
+        include: {
+          friend: {
+            select: {
+              id: true,
+              username: true,
+              nickname: true,
+              avatarUrl: true,
+              bio: true,
+            },
+          },
+        },
+        skip: offset,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      this.prisma.friendship.count({ where: whereCondition }),
+    ]);
+
+    return {
+      blockedUsers: blockedUsers.map(b => b.friend),
+      meta: {
+        total,
+        page: Math.floor(offset / limit) + 1,
+        limit,
+      },
+    };
   }
 }

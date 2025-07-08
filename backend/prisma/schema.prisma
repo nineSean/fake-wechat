@@ -32,6 +32,8 @@ model User {
   // Auth related
   passwordHash  String    @map("password_hash")
   lastLoginAt   DateTime? @map("last_login_at")
+  isOnline      Boolean   @default(false) @map("is_online")
+  lastSeenAt    DateTime? @map("last_seen_at")
 
   // Relationships
   sentFriendRequests     Friendship[] @relation("UserFriendRequests")
