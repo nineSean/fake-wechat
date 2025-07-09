@@ -43,5 +43,6 @@
     "websocket"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@10.13.0+sha256.9c48f1e40890e0daa6d5f61c7b4f8d6c314aceab5710d3e2f7ae44f6ebf2b9ba"
 }
